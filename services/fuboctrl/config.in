@@ -1,0 +1,6 @@
+dep_bool_menu "Heated Floor" FUBOCTRL_SUPPORT
+	dep_bool "Method init auto start" FUBOCTRL_INIT_AUTOSTART_SUPPORT $FUBOCTRL_SUPPORT
+	dep_bool "Method periodic auto start" FUBOCTRL_PERIODIC_AUTOSTART_SUPPORT $FUBOCTRL_SUPPORT
+	comment  "Debugging Flags"
+	dep_bool 'Heated Floor Debug' DEBUG_FUBOCTRL $DEBUG $FUBOCTRL_SUPPORT
+endmenu
