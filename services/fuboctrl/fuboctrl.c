@@ -47,71 +47,83 @@
 #ifdef NAMED_PIN_SUPPORT
 void
 fuboctrl_publish_cb(char const *topic, uint16_t topic_length,
-					const void *payload, uint16_t payload_length)
+                    const void *payload, uint16_t payload_length)
 {
-	FUBOCTRLDEBUG("MQTT Publish: Len(%d) '%s'\n", topic_length, topic);
+  FUBOCTRLDEBUG("MQTT Publish: Len(%d) '%s'\n", topic_length, topic);
 
-	if (topic_length < 13) {
-		return;
-	} else if (topic_length > sizeof(MQTT_CHANNEL_FORMAT)+MAX_NP_LEN-2) {
-		return;
-	}
+  if (topic_length < 13)
+    return;
 
-	char np_name[MAX_NP_LEN+1];
-	uint8_t	on = 0;
-	uint8_t ret;
-  	char strvalue[2];
-  	char *my_topic = NULL;
+  if (topic_length > sizeof(MQTT_CHANNEL_FORMAT) + MAX_NP_LEN - 2)
+    return;
 
-  	my_topic = malloc(topic_length + 1);
-  	if (my_topic == NULL) {
-		FUBOCTRLDEBUG("malloc (%i) failed", topic_length + 1);
-	  	goto cleanup;
-	}
+  char np_name[MAX_NP_LEN + 1];
+  uint8_t on = 0;
+  uint8_t ret;
+  char strvalue[2];
+  char *my_topic = NULL;
 
-  	memcpy(my_topic, topic, topic_length);
-  	my_topic[topic_length] = '\0';
-	ret = sscanf_P(my_topic, PSTR(MQTT_CHANNEL_FORMAT), np_name);
-	if (ret == 1) {
-		uint8_t pincfg = named_pin_by_name (np_name);
-		if (pincfg == 255) {
-			goto cleanup;
-		}
+  my_topic = malloc(topic_length + 1);
+  if (my_topic == NULL)
+  {
+    FUBOCTRLDEBUG("malloc (%i) failed", topic_length + 1);
+    goto cleanup;
+  }
 
-		memcpy(strvalue, payload, 1);
-		strvalue[1] = '\0';
-		sscanf_P(strvalue, PSTR("%hhu"), &on);
+  memcpy(my_topic, topic, topic_length);
+  my_topic[topic_length] = '\0';
+  ret = sscanf_P(my_topic, PSTR(MQTT_CHANNEL_FORMAT), np_name);
+  if (ret == 1)
+  {
+    uint8_t pincfg = named_pin_by_name(np_name);
+    if (pincfg == 255)
+    {
+      goto cleanup;
+    }
 
-		if (on != 0 && on != 1) {
-			goto cleanup;
-		}
+    memcpy(strvalue, payload, 1);
+    strvalue[1] = '\0';
+    sscanf_P(strvalue, PSTR("%hhu"), &on);
 
-		FUBOCTRLDEBUG("PIN %s: %i\n", np_name, on);
+    if (on != 0 && on != 1)
+    {
+      goto cleanup;
+    }
 
-		uint8_t port = pgm_read_byte (&portio_pincfg[pincfg].port);
-		uint8_t pin = pgm_read_byte (&portio_pincfg[pincfg].pin);
-		if (port < IO_PORTS && pin < 8) {
-			if (vport[port].read_ddr (port) & _BV (pin)) {
-				int8_t active_high = pgm_read_byte (&portio_pincfg[pincfg].active_high);
-				uint8_t val = vport[port].read_port (port);
-				if (XOR_LOG (on, !active_high)) {
-					val |= _BV (pin);
-				} else {
-					val &= ~_BV (pin);
-				}
-				vport[port].write_port (port, val);
-			} else {
-				FUBOCTRLDEBUG("%s set to input\n", np_name);
-			}
-		}
+    FUBOCTRLDEBUG("PIN %s: %i\n", np_name, on);
 
-	} else {
-		FUBOCTRLDEBUG("MQTT Publish: wrong topic\n");
-	}
+    uint8_t port = pgm_read_byte(&portio_pincfg[pincfg].port);
+    uint8_t pin = pgm_read_byte(&portio_pincfg[pincfg].pin);
+    if (port < IO_PORTS && pin < 8)
+    {
+      if (vport[port].read_ddr(port) & _BV(pin))
+      {
+        int8_t active_high =
+          pgm_read_byte(&portio_pincfg[pincfg].active_high);
+        uint8_t val = vport[port].read_port(port);
+        if (XOR_LOG(on, !active_high))
+          val |= _BV(pin);
+        else
+          val &= ~_BV(pin);
+
+        vport[port].write_port(port, val);
+      }
+      else
+      {
+        FUBOCTRLDEBUG("%s set to input\n", np_name);
+      }
+    }
+
+  }
+  else
+  {
+    FUBOCTRLDEBUG("MQTT Publish: wrong topic\n");
+  }
 
 cleanup:
-  	if (my_topic != NULL) free (my_topic);
-  	return;
+  if (my_topic != NULL)
+    free(my_topic);
+  return;
 }
 
 #endif /* NAMED_PIN_SUPPORT */
@@ -119,18 +131,18 @@ cleanup:
 static void
 fuboctrl_connack_cb(void)
 {
-	FUBOCTRLDEBUG("MQTT Sub: " MQTT_CHANNEL_TOPIC "\n");
-	mqtt_construct_subscribe_packet(MQTT_CHANNEL_TOPIC);
+  FUBOCTRLDEBUG("MQTT Sub: " MQTT_CHANNEL_TOPIC "\n");
+  mqtt_construct_subscribe_packet(MQTT_CHANNEL_TOPIC);
 }
 
 static const mqtt_callback_config_t mqtt_callback_config PROGMEM = {
-	.connack_callback = fuboctrl_connack_cb,
-	.poll_callback = NULL,
-	.close_callback = NULL,
+  .connack_callback = fuboctrl_connack_cb,
+  .poll_callback = NULL,
+  .close_callback = NULL,
 #ifdef NAMED_PIN_SUPPORT
-	.publish_callback = fuboctrl_publish_cb,
+  .publish_callback = fuboctrl_publish_cb,
 #else
-	.publish_callback = NULL,
+  .publish_callback = NULL,
 #endif /* NAMED_PIN_SUPPORT */
 };
 
@@ -140,12 +152,12 @@ static const mqtt_callback_config_t mqtt_callback_config PROGMEM = {
 int16_t
 fuboctrl_init(void)
 {
-	FUBOCTRLDEBUG ("init\n");
+  FUBOCTRLDEBUG("init\n");
 
-	// enter your code here
-	mqtt_register_callback(&mqtt_callback_config);
+  // enter your code here
+  mqtt_register_callback(&mqtt_callback_config);
 
-	return ECMD_FINAL_OK;
+  return ECMD_FINAL_OK;
 }
 
 /*
@@ -155,28 +167,29 @@ fuboctrl_init(void)
 int16_t
 fuboctrl_periodic(void)
 {
-  	// sending temperature information every 1min
-  	static uint8_t runNo = 1;
-  	if (runNo < 6) {
-	  runNo++;
-	  return ECMD_FINAL_OK;
-	}
+  // sending temperature information every 1min
+  static uint8_t runNo = 1;
+  if (runNo < 6)
+  {
+    runNo++;
+    return ECMD_FINAL_OK;
+  }
 
-  	runNo = 1;
+  runNo = 1;
 
-  	FUBOCTRLDEBUG ("periodic\n");
-	// enter your code here
+  FUBOCTRLDEBUG("periodic\n");
+  // enter your code here
 
-	char topic[TOPIC_LENGTH];
-	char temp[7];
+  char topic[TOPIC_LENGTH];
+  char temp[7];
 
-	strncpy(topic, MQTT_TOPIC_PREFIX "/temp/28481f28020000fa", TOPIC_LENGTH);
-	strncpy(temp, "25.66", 7);
+  strncpy(topic, MQTT_TOPIC_PREFIX "/temp/28481f28020000fa", TOPIC_LENGTH);
+  strncpy(temp, "25.66", 7);
 
 
-	mqtt_construct_publish_packet(topic, temp, 5, false);
+  mqtt_construct_publish_packet(topic, temp, 5, false);
 
-	return ECMD_FINAL_OK;
+  return ECMD_FINAL_OK;
 }
 
 /*
@@ -185,11 +198,12 @@ fuboctrl_periodic(void)
 	Otherwise you can use this function for anything you like
 */
 int16_t
-fuboctrl_onrequest(char *cmd, char *output, uint16_t len){
-	FUBOCTRLDEBUG ("main\n");
-	// enter your code here
+fuboctrl_onrequest(char *cmd, char *output, uint16_t len)
+{
+  FUBOCTRLDEBUG("main\n");
+  // enter your code here
 
-	return ECMD_FINAL_OK;
+  return ECMD_FINAL_OK;
 }
 
 /*

@@ -22,19 +22,17 @@
 #ifndef HAVE_FUBOCTRL_H
 #define HAVE_FUBOCTRL_H
 
-int16_t
-fuboctrl_init(void);
+int16_t fuboctrl_init(void);
 
-int16_t
-fuboctrl_periodic(void);
+int16_t fuboctrl_periodic(void);
 
 
 #include "config.h"
 #ifdef DEBUG_FUBOCTRL
-# include "core/debug.h"
-# define FUBOCTRLDEBUG(a...)  debug_printf("fuboctrl: " a)
+#include "core/debug.h"
+#define FUBOCTRLDEBUG(a...)  debug_printf("fuboctrl: " a)
 #else
-# define FUBOCTRLDEBUG(a...)
+#define FUBOCTRLDEBUG(a...)
 #endif
 
-#endif  /* HAVE_FUBOCTRL_H */
+#endif /* HAVE_FUBOCTRL_H */
