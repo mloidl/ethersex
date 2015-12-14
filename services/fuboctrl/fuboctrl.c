@@ -28,6 +28,10 @@
 #include "config.h"
 #include "fuboctrl.h"
 
+#include "core/bit-macros.h"
+#include "core/portio/named_pin.h"
+#include "core/portio/portio.h"
+
 #include "protocols/mqtt/mqtt.h"
 #include "protocols/ecmd/ecmd-base.h"
 
@@ -35,10 +39,12 @@
 #define MQTT_TOPIC_PREFIX	"home/hk2"
 #define MQTT_TEMP_TOPIC	MQTT_TOPIC_PREFIX "/temp/%16s"
 #define MQTT_CHANNEL_TOPIC	MQTT_TOPIC_PREFIX "/io/#"
-#define MQTT_CHANNEL_FORMAT	MQTT_TOPIC_PREFIX "/io/%i"
+#define MQTT_CHANNEL_FORMAT	MQTT_TOPIC_PREFIX "/io/%s"
+#define MAX_NP_LEN	10
 
 #define TOPIC_LENGTH	(sizeof(MQTT_TOPIC_PREFIX) + 23)
 
+#ifdef NAMED_PIN_SUPPORT
 void
 fuboctrl_publish_cb(char const *topic, uint16_t topic_length,
 					const void *payload, uint16_t payload_length)
@@ -47,10 +53,12 @@ fuboctrl_publish_cb(char const *topic, uint16_t topic_length,
 
 	if (topic_length < 13) {
 		return;
+	} else if (topic_length > sizeof(MQTT_CHANNEL_FORMAT)+MAX_NP_LEN-2) {
+		return;
 	}
 
-	uint8_t channel = 0;
-	uint8_t	value = 0;
+	char np_name[MAX_NP_LEN+1];
+	uint8_t	on = 0;
 	uint8_t ret;
   	char strvalue[2];
   	char *my_topic = NULL;
@@ -63,26 +71,38 @@ fuboctrl_publish_cb(char const *topic, uint16_t topic_length,
 
   	memcpy(my_topic, topic, topic_length);
   	my_topic[topic_length] = '\0';
-	ret = sscanf_P(my_topic, PSTR(MQTT_CHANNEL_FORMAT), &channel);
+	ret = sscanf_P(my_topic, PSTR(MQTT_CHANNEL_FORMAT), np_name);
 	if (ret == 1) {
-		if (channel < 1 || channel > 8) {
+		uint8_t pincfg = named_pin_by_name (np_name);
+		if (pincfg == 255) {
 			goto cleanup;
 		}
 
 		memcpy(strvalue, payload, 1);
 		strvalue[1] = '\0';
-		sscanf_P(strvalue, PSTR("%hhu"), &value);
+		sscanf_P(strvalue, PSTR("%hhu"), &on);
 
-		if (value != 0 && value != 1) {
+		if (on != 0 && on != 1) {
 			goto cleanup;
 		}
 
-		FUBOCTRLDEBUG("CH %i: %i\n", channel, value);
+		FUBOCTRLDEBUG("PIN %s: %i\n", np_name, on);
 
-		if (value == 1) {
-			PORTC |= _BV(channel-1);
-		} else if (value == 0) {
-			PORTC &= ~(_BV(channel-1));
+		uint8_t port = pgm_read_byte (&portio_pincfg[pincfg].port);
+		uint8_t pin = pgm_read_byte (&portio_pincfg[pincfg].pin);
+		if (port < IO_PORTS && pin < 8) {
+			if (vport[port].read_ddr (port) & _BV (pin)) {
+				int8_t active_high = pgm_read_byte (&portio_pincfg[pincfg].active_high);
+				uint8_t val = vport[port].read_port (port);
+				if (XOR_LOG (on, !active_high)) {
+					val |= _BV (pin);
+				} else {
+					val &= ~_BV (pin);
+				}
+				vport[port].write_port (port, val);
+			} else {
+				FUBOCTRLDEBUG("%s set to input\n", np_name);
+			}
 		}
 
 	} else {
@@ -93,6 +113,8 @@ cleanup:
   	if (my_topic != NULL) free (my_topic);
   	return;
 }
+
+#endif /* NAMED_PIN_SUPPORT */
 
 static void
 fuboctrl_connack_cb(void)
@@ -105,7 +127,11 @@ static const mqtt_callback_config_t mqtt_callback_config PROGMEM = {
 	.connack_callback = fuboctrl_connack_cb,
 	.poll_callback = NULL,
 	.close_callback = NULL,
+#ifdef NAMED_PIN_SUPPORT
 	.publish_callback = fuboctrl_publish_cb,
+#else
+	.publish_callback = NULL,
+#endif /* NAMED_PIN_SUPPORT */
 };
 
 /*
@@ -116,8 +142,6 @@ fuboctrl_init(void)
 {
 	FUBOCTRLDEBUG ("init\n");
 
-  	// set every pin on PORTC as output
-  	DDRC = 0xFF;
 	// enter your code here
 	mqtt_register_callback(&mqtt_callback_config);
 
